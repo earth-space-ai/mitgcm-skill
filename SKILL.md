@@ -31,7 +31,7 @@ tags:
 > Skill author: Koutian Wu (ktwu01@gmail.com)
 > Skill version: 0.1.0-scaffold
 
-**What MITgcm does:** Solves the incompressible Boussinesq Navier–Stokes equations on a finite-volume curvilinear grid. The same code can be configured as an ocean GCM, atmospheric GCM, sea-ice model, or biogeochemistry host. Distinguishing features: (a) "isomorphic" ocean/atmosphere capability, (b) full adjoint via TAF/TAMC for sensitivity and data assimilation (ECCO state estimate), (c) extensive package system (`pkg/`) for opt-in physics.
+**What MITgcm does:** Solves the Navier–Stokes equations on a finite-volume curvilinear grid. Default ocean configuration is **incompressible Boussinesq, hydrostatic** but the model also supports **non-Boussinesq**, **non-hydrostatic** (deep convection, small-scale ocean, atmosphere) modes. The same code can be configured as an ocean GCM, atmospheric GCM, sea-ice model, or biogeochemistry host. Distinguishing features: (a) "isomorphic" ocean/atmosphere capability, (b) full adjoint via TAF (commercial) or OpenAD (open) for sensitivity and data assimilation (ECCO state estimate); TAMC is now deprecated, (c) extensive package system (`pkg/`) for opt-in physics.
 
 **Who this skill is for:** Researchers and developers who want to set up an MITgcm experiment, choose packages, write a `data` namelist, build with `genmake2`, run a verification experiment, or use the adjoint.
 
@@ -82,7 +82,7 @@ MITgcm/
 ├── pkg/                # Optional physics/chemistry packages (large)
 ├── tools/              # genmake2, build helpers
 ├── utils/              # Pre/post utilities (Matlab, Python)
-├── verification/       # Test cases / regression suite (large; 80+ experiments)
+├── verification/       # Test cases / regression suite (200+ experiments and variants)
 └── LICENSE.txt         # MIT license
 ```
 
@@ -93,7 +93,7 @@ The `verification/` tree is also the canonical reference for "how is this kind o
 ## Critical Rules
 
 1. **Experiments live outside the source tree.** Standard layout: `mycase/code/`, `mycase/input/`, `mycase/build/`, `mycase/run/`. The `code/` dir holds custom `SIZE.h` and any modified `.F` files; `input/` holds namelists; `build/` is where genmake2 runs; `run/` is where the executable runs.
-2. **`SIZE.h` defines the grid dimensions at compile time.** Change grid → recompile. There is no run-time grid resizing.
+2. **`SIZE.h` defines grid dimensions AND MPI decomposition at compile time.** Variables `nPx`, `nPy`, `nSx`, `nSy` set the process layout; `nPx * nPy` must equal the MPI ranks requested in your batch script. Change any of these → recompile. There is no run-time grid resizing.
 3. **Packages are opted in via `packages.conf`** at compile time, then enabled at run time via `data.pkg`. Both layers must agree.
 4. **`genmake2 -mods=../code -of=<optfile>` is the standard build invocation.** Optfiles for common machines live in `tools/build_options/`.
 5. **Verification experiments are the documentation.** When in doubt about how to configure something, find a verification case that does it and copy.
@@ -114,6 +114,16 @@ The `verification/` tree is also the canonical reference for "how is this kind o
 | reference/adjoint.md | TAF, ECCO, sensitivity |
 | reference/debugging.md | Common errors |
 
+## Critical agent gotchas (Gemini-reviewed)
+
+- **`SIZE.h` hardcodes both grid AND MPI decomposition.** See critical rules.
+- **The `data` namelist is block-structured.** Parameters live in specific blocks (`PARM01`, `PARM02`, `PARM03`, ...); putting a key in the wrong block silently fails or causes a parse error.
+- **MITgcm defaults to big-endian binary I/O.** Forcing files written by Python/NumPy in native little-endian will produce read errors or NaN garbage. Either byte-swap on write or set the appropriate `read_byteswap` switch.
+- **Build with `-mpi` for parallel runs.** Standard invocation: `genmake2 -mods=../code -of=<optfile> -mpi`. Forgetting `-mpi` builds a serial executable that will silently abort if launched with `mpirun`.
+- **Errors land in `STDERR.0000` / `STDOUT.0000`** in the `run/` directory, not just the terminal. Always check those files when debugging silent failures.
+- **`testreport.py` expects experiments inside `verification/`.** The standard "experiments live outside the source tree" rule does not apply when you want to use the built-in regression-test runner.
+- **TAF is commercial, OpenAD is open.** Adjoint workflow requires choosing one; TAMC is deprecated. TAF needs license + `checkpoint_lev*.h` files not in the public repo.
+
 ## Status
 
-Scaffold (v0.1.0-scaffold). Layout and conventions verified against the cloned MITgcm tree. Operational depth being filled in.
+Scaffold (v0.1.0-scaffold). Layout and conventions verified against the cloned MITgcm tree, with Gemini critique pass on 2026-05-09. Operational depth being filled in.
